@@ -1,9 +1,8 @@
 "use-client";
 
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { TranscriptItem } from "@/app/types";
-import { PulseLoader } from 'react-spinners';
 
 export interface TranscriptProps {
   transcriptItems: TranscriptItem[];
@@ -42,7 +41,7 @@ function Transcript({ transcriptItems }: TranscriptProps) {
       className="overflow-auto p-4 flex flex-col gap-y-4 h-full flex-1 bg-white rounded-t-xl"
     >
       {transcriptItems.map((item) => {
-        const { itemId, type, role, data, expanded, timestamp, title = "", isHidden } = item;
+        const { itemId, type, role, timestamp, title = "", isHidden } = item;
 
         if (isHidden) {
           return null;
