@@ -59,6 +59,8 @@ function App() {
 
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [selectedVoice, setSelectedVoice] = useState<string>(availableVoices[0].id); // Default to the first voice (Ash)
+  const [userName, setUserName] = useState<string>("");
+  const [companyName, setCompanyName] = useState<string>("");
 
   // Determine if debug controls should be shown based on URL query param
   const showDebugControls = searchParams.get('debug') === 'true';
@@ -247,20 +249,26 @@ function App() {
 
     const turnDetection = null;
 
-    const instructions = currentAgent?.instructions || "";
-    const tools = currentAgent?.tools || [];
+    // Get base instructions from agent config
+    const baseInstructions = currentAgent?.instructions || "";
+    // Construct the personalized instruction prefix
+    const nameToUse = userName.trim() || "応募者"; // Use a fallback if empty
+    const companyToUse = companyName.trim() || "指定の会社"; // Use a fallback if empty
+    const personalizedPrefix = `あなたは${companyToUse}の採用面接官です。応募者の${nameToUse}さんに対して面接を行ってください。`;
+    // Combine the prefix and base instructions
+    const finalInstructions = `${personalizedPrefix}\n\n${baseInstructions}`;
 
     const sessionUpdateEvent = {
       type: "session.update",
       session: {
         modalities: ["text", "audio"],
-        instructions,
+        instructions: finalInstructions, // Use the combined instructions
         voice: selectedVoice,
         input_audio_format: "pcm16",
         output_audio_format: "pcm16",
         input_audio_transcription: { model: "whisper-1" },
         turn_detection: turnDetection,
-        tools,
+        tools: currentAgent?.tools || [],
       },
     };
 
@@ -429,22 +437,15 @@ function App() {
 
   return (
     <div className="text-base flex flex-col h-screen bg-gray-100 text-gray-800 relative">
-      <div className="p-5 text-lg font-semibold flex justify-between items-center">
-        <div className="flex items-center">
-          <div onClick={() => window.location.reload()} style={{ cursor: 'pointer' }}>
-            <Image
-              src="/openai-logomark.svg"
-              alt="OpenAI Logo"
-              width={20}
-              height={20}
-              className="mr-2"
-            />
-          </div>
+      {/* Conditionally render Header only when disconnected */}
+      {sessionStatus === "DISCONNECTED" && (
+        <div className="p-4 text-lg font-semibold text-center border-b bg-white shadow-sm flex-shrink-0">
+          {/* ... (header content: ライドジョブ模擬面接) ... */}
           <div>
-            Realtime API <span className="text-gray-500">Agents</span>
+            ライドジョブ模擬面接
           </div>
         </div>
-      </div>
+      )}
 
       {/* Main Content Area: Switches based on sessionStatus */}
       <div className="flex flex-col flex-1 overflow-hidden"> {/* Vertical layout, takes remaining space, handles overflow */}
@@ -452,7 +453,7 @@ function App() {
           // --- Voice Selection View ---
           <div className="flex flex-1 items-center justify-center p-4"> {/* Centers the selection box */}
             <div className="p-6 border rounded-lg bg-white shadow-lg w-full max-w-lg">
-              <h3 className="text-xl font-semibold mb-6 text-gray-700 text-center">音声を選択してください</h3>
+              <h3 className="text-xl font-semibold mb-6 text-gray-700 text-center">面接官を選択してください</h3>
               <div className="grid grid-cols-2 gap-8">
                 {availableVoices.map((voice) => (
                   <label
@@ -486,6 +487,37 @@ function App() {
                   </label>
                 ))}
               </div>
+
+              {/* Name and Company Inputs */}
+              <div className="mt-6 space-y-4">
+                <div>
+                  <label htmlFor="userName" className="block text-sm font-medium text-gray-700 mb-1">
+                    お名前
+                  </label>
+                  <input
+                    type="text"
+                    id="userName"
+                    value={userName}
+                    onChange={(e) => setUserName(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="例: 山田 太郎"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="companyName" className="block text-sm font-medium text-gray-700 mb-1">
+                    会社名
+                  </label>
+                  <input
+                    type="text"
+                    id="companyName"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="例: 株式会社ライドジョブ"
+                  />
+                </div>
+              </div>
+
               <button
                 onClick={connectToRealtime}
                 disabled={sessionStatus !== 'DISCONNECTED'}
