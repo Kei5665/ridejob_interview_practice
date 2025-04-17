@@ -5,12 +5,12 @@ import App from "./App";
 
 export default function Page() {
   return (
-    <TranscriptProvider>
-      <EventProvider>
-        <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={<div>Loading...</div>}>
+      <TranscriptProvider>
+        <EventProvider>
           <App />
-        </Suspense>
-      </EventProvider>
-    </TranscriptProvider>
+        </EventProvider>
+      </TranscriptProvider>
+    </Suspense>
   );
 }
