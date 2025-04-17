@@ -26,6 +26,12 @@ import { createRealtimeConnection } from "./lib/realtimeConnection";
 // Agent configs
 import { allAgentSets, defaultAgentSetKey } from "@/app/agentConfigs";
 
+// Define available voices (Simplified, labels corrected, images added, removed specific names)
+const availableVoices = [
+  { id: 'ash', name: '男性', image: '/man.jpg' },    // Assuming Ash is male
+  { id: 'sage', name: '女性', image: '/woman.jpg' },   // Assuming Sage is female
+];
+
 function App() {
   const searchParams = useSearchParams();
 
@@ -52,6 +58,7 @@ function App() {
     useState<boolean>(true);
 
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [selectedVoice, setSelectedVoice] = useState<string>(availableVoices[0].id); // Default to the first voice (Ash)
 
   // Determine if debug controls should be shown based on URL query param
   const showDebugControls = searchParams.get('debug') === 'true';
@@ -96,12 +103,6 @@ function App() {
     setSelectedAgentName(agentKeyToUse);
     setSelectedAgentConfigSet(agents);
   }, [searchParams]);
-
-  useEffect(() => {
-    if (selectedAgentName && sessionStatus === "DISCONNECTED") {
-      connectToRealtime();
-    }
-  }, [selectedAgentName]);
 
   useEffect(() => {
     if (
@@ -168,6 +169,13 @@ function App() {
     setSessionStatus("CONNECTING");
 
     try {
+      // Send selected voice information to the server when connecting
+      // Note: Server-side implementation is required to handle this event
+      logClientEvent({ voice: selectedVoice }, "set_voice_preference");
+      // Example: sendClientEvent({ type: "session.update", parameters: { voice: selectedVoice } });
+      // The actual event format depends on the server implementation.
+      // For now, we just log it. A real implementation would send this via dataChannel after connection.
+
       const EPHEMERAL_KEY = await fetchEphemeralKey();
       if (!EPHEMERAL_KEY) {
         return;
@@ -203,24 +211,6 @@ function App() {
       console.error("Error connecting to realtime:", err);
       setSessionStatus("DISCONNECTED");
     }
-  };
-
-  const disconnectFromRealtime = () => {
-    if (pcRef.current) {
-      pcRef.current.getSenders().forEach((sender) => {
-        if (sender.track) {
-          sender.track.stop();
-        }
-      });
-
-      pcRef.current.close();
-      pcRef.current = null;
-    }
-    setDataChannel(null);
-    setSessionStatus("DISCONNECTED");
-    setIsPTTUserSpeaking(false);
-
-    logClientEvent({}, "disconnected");
   };
 
   const sendSimulatedUserMessage = (text: string) => {
@@ -265,7 +255,7 @@ function App() {
       session: {
         modalities: ["text", "audio"],
         instructions,
-        voice: "coral",
+        voice: selectedVoice,
         input_audio_format: "pcm16",
         output_audio_format: "pcm16",
         input_audio_transcription: { model: "whisper-1" },
@@ -349,20 +339,6 @@ function App() {
     sendClientEvent({ type: "response.create" }, "trigger response PTT");
   };
 
-  const handleAgentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newAgentConfig = e.target.value;
-    const url = new URL(window.location.toString());
-    url.searchParams.set("agentConfig", newAgentConfig);
-    window.location.replace(url.toString());
-  };
-
-  const handleSelectedAgentChange = (
-    e: React.ChangeEvent<HTMLSelectElement>
-  ) => {
-    const newAgentName = e.target.value;
-    setSelectedAgentName(newAgentName);
-  };
-
   useEffect(() => {
     const storedLogsExpanded = localStorage.getItem("logsExpanded");
     if (storedLogsExpanded) {
@@ -398,8 +374,6 @@ function App() {
       }
     }
   }, [isAudioPlaybackEnabled]);
-
-  const agentSetKey = searchParams.get("agentConfig") || "default";
 
   // Calculate if the agent is waiting for a response
   const isAgentWaiting = useMemo(() => {
@@ -453,34 +427,98 @@ function App() {
       </div>
 
       <div className="flex flex-1 gap-2 px-2 overflow-hidden relative">
-        <Transcript
-          userText={userText}
-          setUserText={setUserText}
-          onSendMessage={handleSendTextMessage}
-          canSend={
-            sessionStatus === "CONNECTED" &&
-            dcRef.current?.readyState === "open"
-          }
-        />
+        {/* Show Voice Selection UI only when disconnected */}
+        {sessionStatus === "DISCONNECTED" && selectedAgentConfigSet && (
+          <div className="p-6 border rounded-lg bg-gray-50 self-center max-w-lg mx-auto">
+            <h3 className="text-xl font-semibold mb-6 text-gray-700 text-center">音声を選択してください</h3>
+            {/* Restore grid for horizontal layout */}
+            <div className="grid grid-cols-2 gap-8">
+              {availableVoices.map((voice) => (
+                // Label remains a flex column, center items
+                <label
+                  key={voice.id}
+                  className="flex flex-col items-center space-y-4 cursor-pointer p-4 rounded-lg hover:bg-gray-200 border border-gray-300 transition-colors"
+                >
+                  <Image
+                    src={voice.image}
+                    alt={voice.name}
+                    width={160} // Increased size again
+                    height={160} // Increased size again
+                    className="rounded-full mb-4"
+                  />
+                  {/* Container for radio button and text */}
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      name="voiceSelection"
+                      value={voice.id}
+                      checked={selectedVoice === voice.id}
+                      onChange={(e) => setSelectedVoice(e.target.value)}
+                      // Visually hide the radio button but keep it functional
+                      className="form-radio h-5 w-5 text-blue-600 transition duration-150 ease-in-out opacity-0 absolute"
+                      id={`voice-${voice.id}`}
+                    />
+                    {/* Custom radio button appearance */}
+                    <span className={`inline-block w-5 h-5 border-2 rounded-full flex items-center justify-center ${selectedVoice === voice.id ? 'border-blue-600 bg-blue-100' : 'border-gray-400'}`}>
+                      {selectedVoice === voice.id && (
+                        <span className="w-2.5 h-2.5 bg-blue-600 rounded-full"></span>
+                      )}
+                    </span>
+                    <span className="text-gray-800 text-lg font-medium">{voice.name}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <button
+              onClick={connectToRealtime}
+              disabled={sessionStatus !== 'DISCONNECTED'}
+              className={`mt-6 w-full px-4 py-2 rounded-md text-white font-semibold transition-colors duration-200 ${
+                sessionStatus === 'DISCONNECTED'
+                  ? 'bg-green-600 hover:bg-green-700'
+                  : 'bg-gray-400 cursor-not-allowed'
+              }`}
+            >
+              接続して開始
+            </button>
+          </div>
+        )}
 
-        {showDebugControls && (
-          <Events isExpanded={isEventsPaneExpanded} />
+        {/* Show Chat UI only when connected/connecting */}
+        {sessionStatus !== "DISCONNECTED" && (
+          <>
+            <Transcript
+              userText={userText}
+              setUserText={setUserText}
+              onSendMessage={handleSendTextMessage}
+              canSend={
+                sessionStatus === "CONNECTED" &&
+                dcRef.current?.readyState === "open"
+              }
+            />
+
+            {showDebugControls && (
+              <Events isExpanded={isEventsPaneExpanded} />
+            )}
+          </>
         )}
       </div>
 
-      <BottomToolbar
-        sessionStatus={sessionStatus}
-        isPTTUserSpeaking={isPTTUserSpeaking}
-        handleTalkButtonDown={handleTalkButtonDown}
-        handleTalkButtonUp={handleTalkButtonUp}
-        isEventsPaneExpanded={isEventsPaneExpanded}
-        setIsEventsPaneExpanded={setIsEventsPaneExpanded}
-        isAudioPlaybackEnabled={isAudioPlaybackEnabled}
-        setIsAudioPlaybackEnabled={setIsAudioPlaybackEnabled}
-        handleNextQuestionClick={handleNextQuestionClick}
-        isAgentWaiting={isAgentWaiting}
-        showDebugControls={showDebugControls}
-      />
+      {/* Show Bottom Toolbar only when connected/connecting */}
+      {sessionStatus !== "DISCONNECTED" && (
+        <BottomToolbar
+          sessionStatus={sessionStatus}
+          isPTTUserSpeaking={isPTTUserSpeaking}
+          handleTalkButtonDown={handleTalkButtonDown}
+          handleTalkButtonUp={handleTalkButtonUp}
+          isEventsPaneExpanded={isEventsPaneExpanded}
+          setIsEventsPaneExpanded={setIsEventsPaneExpanded}
+          isAudioPlaybackEnabled={isAudioPlaybackEnabled}
+          setIsAudioPlaybackEnabled={setIsAudioPlaybackEnabled}
+          handleNextQuestionClick={handleNextQuestionClick}
+          isAgentWaiting={isAgentWaiting}
+          showDebugControls={showDebugControls}
+        />
+      )}
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
         <h2 className="text-xl font-semibold mb-4">模擬面接終了</h2>
