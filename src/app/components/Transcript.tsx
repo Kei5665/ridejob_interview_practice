@@ -1,10 +1,11 @@
 "use-client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import { TranscriptItem } from "@/app/types";
 import Image from "next/image";
 import { useTranscript } from "@/app/contexts/TranscriptContext";
+import { PulseLoader } from 'react-spinners';
 
 export interface TranscriptProps {
   userText: string;
@@ -54,6 +55,19 @@ function Transcript({
     }
   }, [canSend]);
 
+  // Check if the assistant is currently responding
+  const isAssistantResponding = useMemo(() => {
+    if (!transcriptItems || transcriptItems.length === 0) {
+      return false;
+    }
+    const lastItem = transcriptItems[transcriptItems.length - 1];
+    return (
+      lastItem.role === 'assistant' &&
+      lastItem.status !== 'DONE' && // Check if status is NOT DONE (adjust if other completed statuses exist)
+      lastItem.status !== 'completed'
+    );
+  }, [transcriptItems]);
+
   return (
     <div className="flex flex-col flex-1 bg-white min-h-0 rounded-xl">
       <div className="relative flex-1 min-h-0">
@@ -90,38 +104,7 @@ function Transcript({
                 </div>
               );
             } else if (type === "BREADCRUMB") {
-              return (
-                <div
-                  key={itemId}
-                  className="flex flex-col justify-start items-start text-gray-500 text-sm"
-                >
-                  <span className="text-xs font-mono">{timestamp}</span>
-                  <div
-                    className={`whitespace-pre-wrap flex items-center font-mono text-sm text-gray-800 ${
-                      data ? "cursor-pointer" : ""
-                    }`}
-                    onClick={() => data && toggleTranscriptItemExpand(itemId)}
-                  >
-                    {data && (
-                      <span
-                        className={`text-gray-400 mr-1 transform transition-transform duration-200 select-none font-mono ${
-                          expanded ? "rotate-90" : "rotate-0"
-                        }`}
-                      >
-                        ▶
-                      </span>
-                    )}
-                    {title}
-                  </div>
-                  {expanded && data && (
-                    <div className="text-gray-800 text-left">
-                      <pre className="border-l-2 ml-1 border-gray-200 whitespace-pre-wrap break-words font-mono text-xs mb-2 mt-2 pl-2">
-                        {JSON.stringify(data, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                </div>
-              );
+              return null;
             } else {
               // Fallback if type is neither MESSAGE nor BREADCRUMB
               return (
@@ -135,6 +118,22 @@ function Transcript({
               );
             }
           })}
+
+          {/* Render loading indicator if assistant is responding */}
+          {isAssistantResponding && (
+            <div key="loading-indicator" className="flex justify-end flex-col items-start">
+              <div className="max-w-lg p-3 rounded-xl bg-gray-100 text-black">
+                <div className="text-xs text-gray-500 font-mono">
+                   {/* Optionally add timestamp if available/needed */}
+                </div>
+                <div className="whitespace-pre-wrap flex items-center">
+                  {/* Example using react-spinners PulseLoader */}
+                  <PulseLoader size={8} color="#888" />
+                  {/* Or just text: <span className="ml-2">考え中...</span> */}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
