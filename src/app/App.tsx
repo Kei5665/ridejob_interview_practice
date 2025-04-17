@@ -384,6 +384,26 @@ function App() {
     return lastMessage.role === "assistant";
   }, [transcriptItems, sessionStatus]);
 
+  // Calculate if the assistant is actively speaking for animation
+  const isAssistantSpeaking = useMemo(() => {
+    if (!transcriptItems || transcriptItems.length === 0 || sessionStatus !== 'CONNECTED') {
+      return false;
+    }
+    const lastItem = transcriptItems[transcriptItems.length - 1];
+    // Check if the last item is from the assistant and its status indicates it's ongoing
+    return (
+      lastItem.role === 'assistant' &&
+      lastItem.status !== 'DONE' // Simplify comparison to potentially avoid TS error
+      // lastItem.status !== 'completed' 
+    );
+  }, [transcriptItems, sessionStatus]);
+
+  // Get the current assistant avatar URL based on selected voice
+  const assistantAvatarUrl = useMemo(() => {
+    const selectedVoiceData = availableVoices.find(v => v.id === selectedVoice);
+    return selectedVoiceData ? selectedVoiceData.image : '/default-avatar.png'; // Fallback
+  }, [selectedVoice]); // Recompute only when selectedVoice changes
+
   const handleNextQuestionClick = () => {
     console.log("Next Question button clicked");
     // Send a simulated user message with the special text
@@ -426,84 +446,118 @@ function App() {
         </div>
       </div>
 
-      <div className="flex flex-1 gap-2 px-2 overflow-hidden relative">
-        {/* Show Voice Selection UI only when disconnected */}
-        {sessionStatus === "DISCONNECTED" && selectedAgentConfigSet && (
-          <div className="p-6 border rounded-lg bg-gray-50 self-center max-w-lg mx-auto">
-            <h3 className="text-xl font-semibold mb-6 text-gray-700 text-center">音声を選択してください</h3>
-            {/* Restore grid for horizontal layout */}
-            <div className="grid grid-cols-2 gap-8">
-              {availableVoices.map((voice) => (
-                // Label remains a flex column, center items
-                <label
-                  key={voice.id}
-                  className="flex flex-col items-center space-y-4 cursor-pointer p-4 rounded-lg hover:bg-gray-200 border border-gray-300 transition-colors"
-                >
-                  <Image
-                    src={voice.image}
-                    alt={voice.name}
-                    width={160} // Increased size again
-                    height={160} // Increased size again
-                    className="rounded-full mb-4"
-                  />
-                  {/* Container for radio button and text */}
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="radio"
-                      name="voiceSelection"
-                      value={voice.id}
-                      checked={selectedVoice === voice.id}
-                      onChange={(e) => setSelectedVoice(e.target.value)}
-                      // Visually hide the radio button but keep it functional
-                      className="form-radio h-5 w-5 text-blue-600 transition duration-150 ease-in-out opacity-0 absolute"
-                      id={`voice-${voice.id}`}
+      {/* Main Content Area: Switches based on sessionStatus */}
+      <div className="flex flex-col flex-1 overflow-hidden"> {/* Vertical layout, takes remaining space, handles overflow */}
+        {sessionStatus === "DISCONNECTED" && selectedAgentConfigSet ? (
+          // --- Voice Selection View ---
+          <div className="flex flex-1 items-center justify-center p-4"> {/* Centers the selection box */}
+            <div className="p-6 border rounded-lg bg-white shadow-lg w-full max-w-lg">
+              <h3 className="text-xl font-semibold mb-6 text-gray-700 text-center">音声を選択してください</h3>
+              <div className="grid grid-cols-2 gap-8">
+                {availableVoices.map((voice) => (
+                  <label
+                    key={voice.id}
+                    className="flex flex-col items-center space-y-4 cursor-pointer p-4 rounded-lg hover:bg-gray-100 border border-gray-300 transition-colors"
+                  >
+                    <Image
+                      src={voice.image}
+                      alt={voice.name}
+                      width={160}
+                      height={160}
+                      className="rounded-full mb-4"
                     />
-                    {/* Custom radio button appearance */}
-                    <span className={`inline-block w-5 h-5 border-2 rounded-full flex items-center justify-center ${selectedVoice === voice.id ? 'border-blue-600 bg-blue-100' : 'border-gray-400'}`}>
-                      {selectedVoice === voice.id && (
-                        <span className="w-2.5 h-2.5 bg-blue-600 rounded-full"></span>
-                      )}
-                    </span>
-                    <span className="text-gray-800 text-lg font-medium">{voice.name}</span>
-                  </div>
-                </label>
-              ))}
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="voiceSelection"
+                        value={voice.id}
+                        checked={selectedVoice === voice.id}
+                        onChange={(e) => setSelectedVoice(e.target.value)}
+                        className="form-radio h-5 w-5 text-blue-600 transition duration-150 ease-in-out opacity-0 absolute"
+                        id={`voice-${voice.id}`}
+                      />
+                      <span className={`inline-block w-5 h-5 border-2 rounded-full flex items-center justify-center ${selectedVoice === voice.id ? 'border-blue-600 bg-blue-100' : 'border-gray-400'}`}>
+                        {selectedVoice === voice.id && (
+                          <span className="w-2.5 h-2.5 bg-blue-600 rounded-full"></span>
+                        )}
+                      </span>
+                      <span className="text-gray-800 text-lg font-medium">{voice.name}</span>
+                    </div>
+                  </label>
+                ))}
+              </div>
+              <button
+                onClick={connectToRealtime}
+                disabled={sessionStatus !== 'DISCONNECTED'}
+                className={`mt-8 w-full px-4 py-3 rounded-md text-white font-semibold text-lg transition-colors duration-200 ${
+                  sessionStatus === 'DISCONNECTED'
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-gray-400 cursor-not-allowed'
+                }`}
+              >
+                接続して開始
+              </button>
             </div>
-            <button
-              onClick={connectToRealtime}
-              disabled={sessionStatus !== 'DISCONNECTED'}
-              className={`mt-6 w-full px-4 py-2 rounded-md text-white font-semibold transition-colors duration-200 ${
-                sessionStatus === 'DISCONNECTED'
-                  ? 'bg-green-600 hover:bg-green-700'
-                  : 'bg-gray-400 cursor-not-allowed'
-              }`}
-            >
-              接続して開始
-            </button>
           </div>
-        )}
-
-        {/* Show Chat UI only when connected/connecting */}
-        {sessionStatus !== "DISCONNECTED" && (
+        ) : (
+          // --- Connected/Connecting View ---
+          // Use a Fragment <> or just list children directly if no wrapper div needed here
           <>
-            <Transcript
-              userText={userText}
-              setUserText={setUserText}
-              onSendMessage={handleSendTextMessage}
-              canSend={
-                sessionStatus === "CONNECTED" &&
-                dcRef.current?.readyState === "open"
-              }
-            />
+            {/* 1. Central Avatar Area */}
+            <div className="flex justify-center items-center pt-8 pb-4 flex-shrink-0 px-2">
+              <Image
+                src={assistantAvatarUrl}
+                alt="Assistant Avatar"
+                width={200}
+                height={200}
+                className={`rounded-full transition-transform duration-300 ease-in-out ${
+                  isAssistantSpeaking ? 'animate-pulse scale-105' : 'scale-100'
+                }`}
+                priority
+              />
+            </div>
 
+            {/* 2. Transcript Area */}
+            <div className="flex-1 overflow-y-auto p-4 bg-white rounded-t-xl shadow-md mx-2 mb-1">
+              <Transcript transcriptItems={transcriptItems} />
+            </div>
+
+            {/* 3. Debug Panels (conditional) */}
             {showDebugControls && (
-              <Events isExpanded={isEventsPaneExpanded} />
+              <div className="flex-shrink-0 px-2 pb-1">
+                <Events isExpanded={isEventsPaneExpanded} />
+              </div>
+            )}
+            {showDebugControls && (
+              <div className="p-4 flex items-center gap-x-2 flex-shrink-0 border-t border-gray-200 bg-white rounded-b-xl mx-2">
+                <input
+                  type="text"
+                  value={userText}
+                  onChange={(e) => setUserText(e.target.value)}
+                  onKeyDown={(e) => {
+                    const canSend = sessionStatus === "CONNECTED" && dcRef.current?.readyState === "open";
+                    if (e.key === "Enter" && canSend && userText.trim()) {
+                      handleSendTextMessage();
+                    }
+                  }}
+                  className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Type a message..."
+                  disabled={!(sessionStatus === "CONNECTED" && dcRef.current?.readyState === "open")}
+                />
+                <button
+                  onClick={handleSendTextMessage}
+                  disabled={!(sessionStatus === "CONNECTED" && dcRef.current?.readyState === "open" && userText.trim())}
+                  className="bg-gray-900 text-white rounded-full p-2 disabled:opacity-50 flex items-center justify-center hover:bg-gray-700 transition-colors"
+                >
+                  <Image src="/arrow.svg" alt="Send" width={20} height={20} />
+                </button>
+              </div>
             )}
           </>
         )}
-      </div>
+      </div> {/* End of Main Content Area */}
 
-      {/* Show Bottom Toolbar only when connected/connecting */}
+      {/* Bottom Toolbar */} 
       {sessionStatus !== "DISCONNECTED" && (
         <BottomToolbar
           sessionStatus={sessionStatus}
@@ -520,6 +574,7 @@ function App() {
         />
       )}
 
+      {/* Modal */} 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
         <h2 className="text-xl font-semibold mb-4">模擬面接終了</h2>
         <p>お疲れ様でした。模擬面接はこれで終了です。</p>
